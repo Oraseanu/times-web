@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "node --test"
+    "preview": "npm run build && wrangler dev",
+    "test": "node --test",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.39.0",
     "@vitejs/plugin-react": "^4.5.2",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "wrangler": "^4.95.0"
   }
 }
