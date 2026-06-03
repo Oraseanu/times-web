@@ -85,14 +85,15 @@ Fisierul `src/App.jsx` contine componenta principala, contextul global si compon
 Logica comuna a fost extrasa in module dedicate:
 
 - `src/data/initialState.js`: date initiale si valori implicite;
+- `src/data/repositories/`: repository-urile pentru demo, local si cloud;
+- `src/config/environment.js`: configuratia derivata din variabile de mediu;
 - `src/utils/timeTracking.js`: helper-e pentru activitati, date calendaristice, pontaje si totaluri;
-- `src/state/persistence.js`: incarcare si salvare in `localStorage`;
 - `src/styles/app.css`: stilurile aplicatiei;
 - `test/timeTracking.test.js`: teste pentru calculul pontajelor si totalurilor.
 
 ## Modelul de stare
 
-Starea globala porneste din `initialState`, este incarcata prin `loadState(initialState)` si este tinuta cu `useState` in componenta `App`.
+Starea globala porneste din `initialState`, este incarcata prin repository-ul injectat in `App` si este tinuta cu `useState` in componenta `App`.
 
 Principalele zone de date sunt:
 
@@ -228,13 +229,51 @@ Nu sunt folosite CSS Modules, Tailwind sau alte solutii externe de styling.
 
 ## Persistenta si backend
 
-Aplicatia are persistenta locala prin `localStorage`, implementata in `src/state/persistence.js`.
+Aplicatia foloseste un strat de repository pentru persistenta, injectat la pornire in functie de variabilele de mediu.
 
-- nu foloseste `fetch`, `axios` sau API-uri externe;
-- nu are backend;
-- nu are baza de date.
+`APP_MODE` poate avea valorile:
 
-La refresh de pagina, modificarile facute in interfata sunt reincarcate din cheia `times-web-state`, daca browserul permite accesul la `localStorage`. Daca starea salvata lipseste sau nu poate fi citita, aplicatia revine la `initialState`.
+- `demo`: foloseste `MemoryStateRepository`, cu date doar in memorie, fara persistenta intre refresh-uri;
+- `local_prod`: foloseste un API local configurat prin `LOCAL_API_BASE_URL`, sau `localStorage` ca fallback daca URL-ul lipseste;
+- `cloud_prod`: foloseste un API remote configurat prin `CLOUD_API_BASE_URL`.
+
+Repository-urile expun aceleasi metode:
+
+```js
+loadState(defaultState)
+saveState(state)
+```
+
+Pentru `local_prod` si `cloud_prod`, contractul API este:
+
+```text
+GET /state
+PUT /state
+```
+
+Backend-ul concret poate salva datele intr-o baza locala, intr-un fisier SQLite sau intr-o baza cloud, fara sa schimbe codul UI.
+
+Pentru `local_prod`, proiectul include si un API local minimal, fara dependinte externe:
+
+```bash
+npm run local-api
+```
+
+Acesta expune `GET /state` si `PUT /state` si salveaza datele in `LOCAL_DB_FILE`, implicit `local-db/state.json`. Folderul `local-db/` este ignorat de Git.
+
+Configuratia se copiaza din `.env.example` intr-un fisier local `.env`, care nu se urca in Git.
+
+Pentru rulare in reteaua Wi-Fi a unei cladiri, seteaza de exemplu:
+
+```env
+APP_MODE=local_prod
+VITE_HOST=0.0.0.0
+VITE_PORT=5173
+LOCAL_API_BASE_URL=http://IP-UL-SERVERULUI:8787
+LOCAL_API_HOST=0.0.0.0
+LOCAL_API_PORT=8787
+LOCAL_DB_FILE=local-db/state.json
+```
 
 ## Comenzi disponibile
 
@@ -262,11 +301,31 @@ Preview pentru build:
 npm run preview
 ```
 
+Pornire API local:
+
+```bash
+npm run local-api
+```
+
+Deploy API cloud Cloudflare Worker:
+
+```bash
+npm run cloud-api:deploy
+```
+
+Aplicare migrari cloud D1:
+
+```bash
+npm run cloud-db:migrate
+```
+
 Rulare teste:
 
 ```bash
 npm run test
 ```
+
+Ghidul complet pentru Cloudflare Pages + Worker + D1 este in `docs/CLOUD_DEPLOY.md`.
 
 ## Directii recomandate de evolutie
 

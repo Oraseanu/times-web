@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "times-web-api",
+  "main": "./d1-api-worker.js",
+  "compatibility_date": "2026-05-31",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "times-web-db",
+      "database_id": "491c77c0-5f50-4c38-828f-cc3c554c5e1e",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}

@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "local-api": "node server/local-api.js",
+    "cloud-api:dev": "npx wrangler dev --config cloud/wrangler.jsonc",
+    "cloud-api:deploy": "npx wrangler deploy --config cloud/wrangler.jsonc",
+    "cloud-db:migrate": "npx wrangler d1 migrations apply times-web-db --remote --config cloud/wrangler.jsonc",
     "build": "vite build",
     "preview": "npm run build && wrangler dev",
     "test": "node --test",

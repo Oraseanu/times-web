@@ -1,7 +1,6 @@
 ﻿import { useEffect, useRef, useState, createContext, useContext } from "react";
 import "./styles/app.css";
 import { initialState } from "./data/initialState.js";
-import { loadState, saveState } from "./state/persistence.js";
 import {
   actSlug,
   adjustTimeLogEntry,
@@ -34,7 +33,7 @@ function ConfirmDialog({ message, onYes, onNo }) {
       <div style={{background:"#16181f",border:"1px solid #2a2d38",borderRadius:12,padding:"28px 32px",maxWidth:380,width:"90%",boxShadow:"0 24px 64px rgba(0,0,0,.5)"}}>
         <p style={{fontSize:15,marginBottom:24,lineHeight:1.5,color:"#e8eaf0"}}>{message}</p>
         <div style={{display:"flex",justifyContent:"flex-end",gap:12}}>
-          <button onClick={onNo} style={{padding:"9px 16px",background:"transparent",border:"1px solid #2a2d38",borderRadius:8,color:"#8b8fa8",fontFamily:"inherit",fontSize:14,cursor:"pointer"}}>Anulează</button>
+          <button onClick={onNo} style={{padding:"9px 16px",background:"transparent",border:"1px solid #2a2d38",borderRadius:8,color:"#8b8fa8",fontFamily:"inherit",fontSize:14,cursor:"pointer"}}>Anuleaza</button>
           <button onClick={onYes} style={{padding:"9px 16px",background:"#e05252",border:"none",borderRadius:8,color:"#fff",fontFamily:"inherit",fontSize:14,fontWeight:600,cursor:"pointer"}}>Șterge</button>
         </div>
       </div>
@@ -51,9 +50,9 @@ function UserAvatar({ user, size = "" }) {
 }
 
 function formatTenure(createdAt) {
-  if (!createdAt) return "Necunoscută";
+  if (!createdAt) return "Necunoscuta";
   const start = new Date(`${createdAt}T00:00:00`);
-  if (Number.isNaN(start.getTime())) return "Necunoscută";
+  if (Number.isNaN(start.getTime())) return "Necunoscuta";
   const today = new Date();
   const days = Math.max(0, Math.floor((today - start) / (24 * 60 * 60 * 1000)));
   if (days < 30) return `${days} zile`;
@@ -64,8 +63,9 @@ function formatTenure(createdAt) {
   return restMonths ? `${years} ani și ${restMonths} luni` : `${years} ani`;
 }
 
-export default function App() {
-  const [state, setState] = useState(() => loadState(initialState));
+export default function App({ repository }) {
+  const [state, setState] = useState(initialState);
+  const [isStateLoaded, setIsStateLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [view, setView] = useState("login");
   const [selectedProject, setSelectedProject] = useState(null);
@@ -75,8 +75,19 @@ export default function App() {
   const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    let active = true;
+    repository.loadState(initialState).then(loadedState => {
+      if (!active) return;
+      setState(loadedState);
+      setIsStateLoaded(true);
+    });
+    return () => { active = false; };
+  }, [repository]);
+
+  useEffect(() => {
+    if (!isStateLoaded) return;
+    repository.saveState(state);
+  }, [isStateLoaded, repository, state]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -108,7 +119,12 @@ export default function App() {
         />
       )}
       {view === "login" && <LoginPage />}
-      {view !== "login" && <Shell />}
+      {view !== "login" && (
+        <>
+          <Shell />
+          <MobileBottomNav />
+        </>
+      )}
     </AppContext.Provider>
   );
 }
@@ -116,30 +132,50 @@ export default function App() {
 function Shell() {
   const { currentUser, view, setView, logout, setSelectedProject, setSelectedWorker } = useContext(AppContext);
   const isAdmin = currentUser?.role === "admin";
+  function goDashboard() {
+    setView("dashboard");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+  function goProfile() {
+    setView("profile");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+  function goWorkers() {
+    setView("workers");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+  function goConfig() {
+    setView("config");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar-logo">
           <span className="logo-mark">PM</span>
-          <span className="logo-text">ProiectManager</span>
+          <span className="logo-text">ProjectManager</span>
         </div>
         <nav className="sidebar-nav">
-          <button className={`nav-item ${view === "dashboard" ? "active" : ""}`} onClick={() => { setView("dashboard"); setSelectedProject(null); setSelectedWorker(null); }}>
+          <button className={`nav-item ${view === "dashboard" ? "active" : ""}`} onClick={goDashboard}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
             Proiecte
           </button>
-          <button className={`nav-item ${view === "profile" ? "active" : ""}`} onClick={() => { setView("profile"); setSelectedProject(null); setSelectedWorker(null); }}>
+          <button className={`nav-item ${view === "profile" ? "active" : ""}`} onClick={goProfile}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
             Profil
           </button>
           {isAdmin && (
-            <button className={`nav-item ${["workers", "workerProjects", "workerProjectTimesheet"].includes(view) ? "active" : ""}`} onClick={() => { setView("workers"); setSelectedProject(null); setSelectedWorker(null); }}>
+            <button className={`nav-item ${["workers", "workerProjects", "workerProjectTimesheet"].includes(view) ? "active" : ""}`} onClick={goWorkers}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
               Workeri
             </button>
           )}
           {isAdmin && (
-            <button className={`nav-item ${view === "config" ? "active" : ""}`} onClick={() => { setView("config"); setSelectedProject(null); setSelectedWorker(null); }}>
+            <button className={`nav-item ${view === "config" ? "active" : ""}`} onClick={goConfig}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
               Configurare
             </button>
@@ -162,6 +198,7 @@ function Shell() {
         {view === "dashboard" && <Dashboard />}
         {view === "profile" && <ProfileView />}
         {view === "project" && <ProjectView />}
+        {view === "todayTime" && <TodayTimeView />}
         {view === "workers" && <WorkersView />}
         {view === "workerProjects" && <WorkerProjectsView />}
         {view === "workerProjectTimesheet" && <WorkerProjectTimesheetView />}
@@ -174,20 +211,86 @@ function Shell() {
   );
 }
 
+function MobileBottomNav() {
+  const { currentUser, view, setView, setSelectedProject, setSelectedWorker } = useContext(AppContext);
+  const isAdmin = currentUser?.role === "admin";
+
+  function goDashboard() {
+    setView("dashboard");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+
+  function goProfile() {
+    setView("profile");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+
+  function goWorkers() {
+    setView("workers");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+
+  function goTodayTime() {
+    setView("todayTime");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+
+  function goConfig() {
+    setView("config");
+    setSelectedProject(null);
+    setSelectedWorker(null);
+  }
+
+  return (
+    <nav className="mobile-bottom-nav" aria-label="Navigație principală">
+      <button type="button" className={`mobile-nav-item ${view === "dashboard" ? "active" : ""}`} onClick={goDashboard}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span>Proiecte</span>
+      </button>
+      {!isAdmin && (
+        <button type="button" className={`mobile-nav-item ${["todayTime", "project", "activity"].includes(view) ? "active" : ""}`} onClick={goTodayTime}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Pontaj</span>
+        </button>
+      )}
+      {isAdmin && (
+        <button type="button" className={`mobile-nav-item ${["workers", "workerProjects", "workerProjectTimesheet"].includes(view) ? "active" : ""}`} onClick={goWorkers}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/></svg>
+          <span>Workeri</span>
+        </button>
+      )}
+      {isAdmin && (
+        <button type="button" className={`mobile-nav-item ${view === "config" ? "active" : ""}`} onClick={goConfig}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <span>Config</span>
+        </button>
+      )}
+      <button type="button" className={`mobile-nav-item ${view === "profile" ? "active" : ""}`} onClick={goProfile}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        <span>Profil</span>
+      </button>
+    </nav>
+  );
+}
+
 function LoginPage() {
   const ctx = useContext(AppContext);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   function handleLogin() {
-    if (!ctx.login(username, password)) setError("Utilizator sau parolă incorectă.");
+    if (!ctx.login(username, password)) setError("Utilizator sau parola incorectă.");
   }
   return (
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
           <span className="logo-mark lg">PM</span>
-          <h1>ProiectManager</h1>
+          <h1>ProjectManager</h1>
           <p>Gestionează proiecte, activități și echipe</p>
         </div>
         <div className="login-form">
@@ -219,7 +322,7 @@ function Dashboard() {
   const archivedProjects = state.projects.filter(p => isProjectArchived(state, p));
 
   function deleteProject(id) {
-    confirm("Ești sigur că vrei să ștergi proiectul?", () => {
+    confirm("Ești sigur că vrei să Ștergi proiectul?", () => {
       setState(s => ({ ...s, projects: s.projects.filter(p => p.id !== id) }));
       notify("Proiect șters.", "info");
     });
@@ -234,10 +337,16 @@ function Dashboard() {
     notify("Proiect dezarhivat.", "success");
   }
 
+  function togglePinnedProject(projectId) {
+    togglePinnedProjectForWorker(setState, currentUser.id, projectId);
+    notify(isProjectPinnedForWorker(state, currentUser.id, projectId) ? "Proiect scos din Pontaj." : "Proiect adăugat în Pontaj.");
+  }
+
   function renderProjectCard(p) {
     const totalMins = getProjectTotalMinutes(state, p.id, isAdmin ? null : currentUser.id);
     const workerAct = currentUser?.activity ? actSlug(currentUser.activity) : "";
     const workweekDays = !isAdmin ? getProjectWorkweekDays(state, p.id, currentUser.id) : [];
+    const pinnedForToday = !isAdmin && isProjectPinnedForWorker(state, currentUser.id, p.id);
 
     return (
       <div
@@ -254,6 +363,16 @@ function Dashboard() {
             </div>
           </div>
           <div className="project-actions">
+            {!isAdmin && (
+              <label className={`today-pin ${pinnedForToday ? "active" : ""}`} onClick={e => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={pinnedForToday}
+                  onChange={() => togglePinnedProject(p.id)}
+                />
+                <span>În Pontaj</span>
+              </label>
+            )}
             {isAdmin && (
               <button className="btn-icon danger" title="Șterge proiectul" aria-label="Șterge proiectul" onClick={e => { e.stopPropagation(); deleteProject(p.id); }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -267,7 +386,7 @@ function Dashboard() {
           <span className="project-time-label">{isAdmin ? "total echipă" : currentUser.activity}</span>
         </div>
         {!isAdmin && (
-          <div className="project-week-strip" title="Săptămâna curentă (Lun–Vin)">
+          <div className="project-week-strip" title="S?pt?m?na curenta (Lun–Vin)">
             {workweekDays.map((day) => (
               <div
                 key={day.dateKey}
@@ -301,13 +420,8 @@ function Dashboard() {
           <span className="archived-total">{fmtTime(totalMins)}</span>
         </div>
         <div className="project-actions">
-          <button
-            className="btn-icon restore"
-            title="Dezarhivează proiectul"
-            aria-label="Dezarhivează proiectul"
-            onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 7 3 3 7 3"/><path d="M3 3l6.5 6.5"/><path d="M21 12a9 9 0 1 1-2.64-6.36"/></svg>
+          <button className="btn-icon restore" title="Dezarhiveaza proiectul" aria-label="Dezarhiveaza proiectul" onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg>
           </button>
           {isAdmin && (
             <button className="btn-icon danger" title="Șterge proiectul" aria-label="Șterge proiectul" onClick={e => { e.stopPropagation(); deleteProject(p.id); }}>
@@ -360,8 +474,8 @@ function Dashboard() {
       {state.projects.length === 0 && <div className="empty-state"><div className="empty-icon">📁</div><p>Niciun proiect. Creează primul proiect.</p></div>}
       {state.projects.length > 0 && (
         <>
-          {renderProjectSection("Active", activeProjects, "Nu există proiecte active.")}
-          {renderProjectSection("Arhivate", archivedProjects, "Nu există proiecte arhivate.", true)}
+          {renderProjectSection("Active", activeProjects, "Nu exista proiecte active.")}
+          {renderProjectSection("Arhivate", archivedProjects, "Nu exista proiecte arhivate.", true)}
         </>
       )}
     </div>
@@ -456,7 +570,7 @@ function WorkerWeekSummary({ project, visibleActivities, userId = null, title = 
                 {columns.map(col => (
                   <td key={col.key} className="td-mins">—</td>
                 ))}
-                <td className="td-total" title="Ore înregistrate înainte de pontajul pe zile">{fmtTime(legacyTotal)}</td>
+                <td className="td-total" title="Ore înregistrate ?nainte de pontajul pe zile">{fmtTime(legacyTotal)}</td>
               </tr>
             )}
           </tbody>
@@ -475,18 +589,18 @@ function WorkerWeekSummary({ project, visibleActivities, userId = null, title = 
       </div>
       <div className="mobile-week-list">
         {mobileDays.map(day => (
-          <div key={day.date} className={`mobile-day-card ${day.isToday ? "today" : ""}`}>
+          <div key={day.key} className={`mobile-day-card ${day.isToday ? "today" : ""}`}>
             <div className="mobile-day-head">
               <div>
                 <h4>{day.label}</h4>
-                <span>{day.date}</span>
+                <span>{day.day.dateKey}</span>
               </div>
               <strong>{day.total > 0 ? fmtTime(day.total) : "—"}</strong>
             </div>
             {day.entries.length > 0 ? (
               <div className="mobile-day-entries">
                 {day.entries.map(entry => (
-                  <div key={`${day.date}-${entry.activity}-${entry.subName}`} className="mobile-day-entry">
+                  <div key={`${day.key}-${entry.activity}-${entry.subName}`} className="mobile-day-entry">
                     <div>
                       <span className={`pill pill-${entry.actClass}`}>{entry.activity}</span>
                       <p>{entry.subName}</p>
@@ -505,7 +619,7 @@ function WorkerWeekSummary({ project, visibleActivities, userId = null, title = 
             <div className="mobile-day-head">
               <div>
                 <h4>Pontaj istoric</h4>
-                <span>Înainte de pontajul pe zile</span>
+                <span>?nainte de pontajul pe zile</span>
               </div>
               <strong>{fmtTime(legacyTotal)}</strong>
             </div>
@@ -514,7 +628,7 @@ function WorkerWeekSummary({ project, visibleActivities, userId = null, title = 
       </div>
       {legacyTotal > 0 && (
         <p className="week-legacy-note">
-          Total proiect ({fmtTime(projectTotal)}) include {fmtTime(legacyTotal)} din pontajul istoric, neinclus în zilele săptămânii curente.
+          Total proiect ({fmtTime(projectTotal)}) include {fmtTime(legacyTotal)} din pontajul istoric, neinclus în zilele saptamânii curente.
         </p>
       )}
     </section>
@@ -553,8 +667,131 @@ function getIsoWeekNumber(date) {
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
+function getCurrentMonthWeekKeys(referenceDate = new Date()) {
+  const firstDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0);
+  const weekKeys = new Set();
+  for (let date = getWeekStart(firstDay); date <= lastDay; date = addDays(date, 7)) {
+    weekKeys.add(dateKeyLocal(date));
+  }
+  return weekKeys;
+}
+
+function getLastCompletedMonth(referenceDate = new Date()) {
+  const firstDayThisMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const firstDay = new Date(firstDayThisMonth.getFullYear(), firstDayThisMonth.getMonth() - 1, 1);
+  const lastDay = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0);
+  const key = `${firstDay.getFullYear()}-${String(firstDay.getMonth() + 1).padStart(2, "0")}`;
+  const label = firstDay.toLocaleDateString("ro-RO", { month: "long", year: "numeric" });
+  return { firstDay, lastDay, key, label };
+}
+
+function getMonthWorkDays(monthInfo) {
+  const days = [];
+  for (let date = new Date(monthInfo.firstDay); date <= monthInfo.lastDay; date = addDays(date, 1)) {
+    const day = date.getDay();
+    if (day === 0 || day === 6) continue;
+    days.push({
+      date,
+      dateKey: dateKeyLocal(date),
+      label: `${RO_DAYS_SHORT[day]} ${date.getDate()}`,
+    });
+  }
+  return days;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function minutesForEntriesOnDate(entries, dateKey) {
+  return entries.reduce((sum, entry) => sum + minutesOnDate(entry, dateKey), 0);
+}
+
+function downloadXlsWorkbook(filename, sheets) {
+  const sheetHtml = sheets.map(sheet => `
+    <h2>${escapeHtml(sheet.title)}</h2>
+    <table border="1">
+      <thead><tr>${sheet.headers.map(header => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>
+        ${sheet.rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
+      </tbody>
+    </table>
+  `).join("<br/>");
+  const html = `<!doctype html><html><head><meta charset="utf-8"/></head><body>${sheetHtml}</body></html>`;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportAdminProjectMonthXls(state, project, workers, activityTypes) {
+  const month = getLastCompletedMonth();
+  const days = getMonthWorkDays(month);
+  const sheets = activityTypes.map(activityName => {
+    const rows = buildAdminActivityRows(state, project, activityName, workers)
+      .filter(row => row.subId || row.rowTotal > 0)
+      .map(row => {
+        const dayMinutes = days.map(day => minutesForEntriesOnDate(row.entries, day.dateKey));
+        const total = dayMinutes.reduce((sum, mins) => sum + mins, 0);
+        return [
+          activityName,
+          row.subName,
+          ...dayMinutes.map(fmtCell),
+          fmtTime(total),
+        ];
+      });
+    return {
+      title: `${project.name} - ${activityName} - ${month.label}`,
+      headers: ["Activitate", "Subactivitate", ...days.map(day => day.label), "Total"],
+      rows: rows.length ? rows : [["Fără pontaj", "", ...days.map(() => ""), "0h"]],
+    };
+  });
+  downloadXlsWorkbook(`pontaj-proiect-${project.name}-${month.key}.xls`, sheets);
+}
+
+function exportWorkerMonthXls(state, worker, projects) {
+  const month = getLastCompletedMonth();
+  const days = getMonthWorkDays(month);
+  const visibleActivities = ["Administrativ", worker.activity].filter(Boolean);
+  const rows = [];
+
+  for (const project of projects) {
+    for (const activityName of visibleActivities) {
+      for (const sub of getSubactivities(state, activityName)) {
+        const entry = state.timeLogs[timeLogKey(project.id, activityName, sub.id, worker.id)];
+        const dayMinutes = days.map(day => minutesOnDate(entry, day.dateKey));
+        const total = dayMinutes.reduce((sum, mins) => sum + mins, 0);
+        if (total === 0) continue;
+        rows.push([
+          project.name,
+          activityName,
+          sub.name,
+          ...dayMinutes.map(fmtCell),
+          fmtTime(total),
+        ]);
+      }
+    }
+  }
+
+  downloadXlsWorkbook(`pontaj-worker-${worker.name}-${month.key}.xls`, [{
+    title: `${worker.name} - ${month.label}`,
+    headers: ["Proiect", "Activitate", "Subactivitate", ...days.map(day => day.label), "Total"],
+    rows: rows.length ? rows : [["Fără pontaj", "", "", ...days.map(() => ""), "0h"]],
+  }]);
+}
+
 function buildSummaryWeeks(state, projectId, userId, visibleActivities, currentWeekKey) {
-  const weekKeys = new Set([currentWeekKey]);
+  const weekKeys = new Set([currentWeekKey, ...getCurrentMonthWeekKeys()]);
   for (const [key, entry] of Object.entries(state.timeLogs)) {
     const belongsToVisibleActivity = visibleActivities.some(activityName =>
       key.startsWith(`${projectId}_${activityName}_`) && key.endsWith(`_${userId}`)
@@ -623,14 +860,279 @@ function getSummaryCellMinutes(row, column) {
   return column.week.days.reduce((sum, day) => sum + minutesOnDate(row.entry, day.dateKey), 0);
 }
 
+function buildCumulativeSummaryWeeks(state, projectIds, userId, visibleActivities, currentWeekKey) {
+  const weekKeys = new Set([currentWeekKey, ...getCurrentMonthWeekKeys()]);
+  for (const [key, entry] of Object.entries(state.timeLogs)) {
+    if (!key.endsWith(`_${userId}`)) continue;
+    const belongsToVisibleActivity = projectIds.some(projectId =>
+      visibleActivities.some(activityName => key.startsWith(`${projectId}_${activityName}_`))
+    );
+    if (!belongsToVisibleActivity) continue;
+    for (const dateKey of Object.keys(entry && typeof entry === "object" ? entry : {})) {
+      if (dateKey === "_legacy") continue;
+      weekKeys.add(getWeekStartKey(parseDateKey(dateKey)));
+    }
+  }
+
+  return [...weekKeys].sort((a, b) => a.localeCompare(b)).map(weekKey => {
+    const monday = parseDateKey(weekKey);
+    const days = Array.from({ length: 5 }, (_, i) => {
+      const date = addDays(monday, i);
+      const dateKey = dateKeyLocal(date);
+      return {
+        date,
+        dateKey,
+        head: `${RO_DAYS_SHORT[date.getDay()]} ${date.getDate()}`,
+        isToday: dateKey === dateKeyLocal(new Date()),
+      };
+    });
+    return {
+      key: weekKey,
+      label: `W${String(getIsoWeekNumber(monday)).padStart(2, "0")}`,
+      days,
+    };
+  });
+}
+
+function buildCumulativeWeeklyRows(state, projects, userId, visibleActivities) {
+  return visibleActivities.flatMap(activityName => {
+    const subs = getSubactivities(state, activityName);
+    if (subs.length === 0) {
+      return [{
+        activity: activityName,
+        actClass: actSlug(activityName),
+        subId: null,
+        subName: "—",
+        entries: [],
+        rowTotal: 0,
+        legacyTotal: 0,
+      }];
+    }
+
+    return subs.map(sub => {
+      const entries = projects
+        .map(project => state.timeLogs[timeLogKey(project.id, activityName, sub.id, userId)])
+        .filter(Boolean);
+      const legacyTotal = entries.reduce((sum, entry) => {
+        const normalized = typeof entry === "number" ? { _legacy: entry } : entry;
+        return sum + (normalized?._legacy || 0);
+      }, 0);
+      return {
+        activity: activityName,
+        actClass: actSlug(activityName),
+        subId: sub.id,
+        subName: sub.name,
+        entries,
+        rowTotal: entries.reduce((sum, entry) => sum + totalLogMinutes(entry), 0),
+        legacyTotal,
+      };
+    });
+  });
+}
+
+function getCumulativeSummaryCellMinutes(row, column) {
+  if (column.type === "day") {
+    return row.entries.reduce((sum, entry) => sum + minutesOnDate(entry, column.day.dateKey), 0);
+  }
+  return column.week.days.reduce((sum, day) => {
+    return sum + row.entries.reduce((entrySum, entry) => entrySum + minutesOnDate(entry, day.dateKey), 0);
+  }, 0);
+}
+
+function CumulativeWorkerWeekSummary({ projects, visibleActivities, title = "Istoric Pontaj" }) {
+  const { state, currentUser } = useContext(AppContext);
+  const currentWeekKey = getWeekStartKey(new Date());
+  const [expandedWeekKey, setExpandedWeekKey] = useState(currentWeekKey);
+  const projectIds = projects.map(project => project.id);
+  const weekRows = buildCumulativeWeeklyRows(state, projects, currentUser.id, visibleActivities);
+  const weeks = buildCumulativeSummaryWeeks(state, projectIds, currentUser.id, visibleActivities, currentWeekKey);
+  const safeExpandedWeekKey = weeks.some(week => week.key === expandedWeekKey) ? expandedWeekKey : currentWeekKey;
+  const columns = weeks.flatMap(week => {
+    if (week.key !== safeExpandedWeekKey) {
+      return [{ type: "week", key: week.key, label: week.label, week }];
+    }
+    return week.days.map(day => ({ type: "day", key: day.dateKey, label: day.head, isToday: day.isToday, day, week }));
+  });
+  const colTotals = columns.map(column =>
+    weekRows.reduce((sum, row) => sum + getCumulativeSummaryCellMinutes(row, column), 0)
+  );
+  const weekTotal = colTotals.reduce((sum, mins) => sum + mins, 0);
+  const grandTotal = weekRows.reduce((sum, row) => sum + row.rowTotal, 0);
+  const legacyTotal = weekRows.reduce((sum, row) => sum + (row.legacyTotal || 0), 0);
+  const mobileDays = columns.filter(column => column.type === "day").map(column => ({
+    ...column,
+    total: colTotals[columns.findIndex(col => col.key === column.key)],
+    entries: weekRows
+      .map(row => ({
+        activity: row.activity,
+        actClass: row.actClass,
+        subName: row.subName,
+        minutes: getCumulativeSummaryCellMinutes(row, column),
+      }))
+      .filter(entry => entry.minutes > 0),
+  }));
+
+  if (projects.length === 0) {
+    return (
+      <section className="week-summary">
+        <div className="week-summary-header">
+          <h3>{title}</h3>
+        </div>
+        <div className="empty-state small"><span>Bifează proiecte în Pontaj ca să vezi istoricul cumulat.</span></div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="week-summary">
+      <div className="week-summary-header">
+        <h3>{title}</h3>
+        <span className="week-project-badge">Total cumulat: <strong>{fmtTime(grandTotal)}</strong></span>
+      </div>
+      <div className="timesheet-wrap">
+        <table className="timesheet">
+          <thead>
+            <tr>
+              <th className="th-task"><span>Activitate</span><small>Subactivitate</small></th>
+              {columns.map(col => (
+                <th key={col.key} className={`${col.type === "week" ? "th-week collapsed" : "th-day"} ${col.isToday ? "today" : ""}`} title={col.label}>
+                  {col.type === "week" ? (
+                    <button type="button" onClick={() => setExpandedWeekKey(col.week.key)}>
+                      <span>{col.label}</span>
+                      <small>total</small>
+                    </button>
+                  ) : (
+                    <>
+                      <span>{col.day.date.toLocaleDateString("ro-RO", { weekday: "short" })}</span>
+                      <small>{col.day.date.getDate()}</small>
+                    </>
+                  )}
+                </th>
+              ))}
+              <th className="th-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weekRows.map(row => {
+              const rowVisibleTotal = columns.reduce((sum, col) => sum + getCumulativeSummaryCellMinutes(row, col), 0);
+              return (
+                <tr key={`${row.activity}-${row.subId ?? "empty"}`} className={`act-row act-${row.actClass}`}>
+                  <td className="td-task">
+                    <span className={`activity-code act-${row.actClass}`}>{row.activity.slice(0, 3).toUpperCase()}</span>
+                    <span>{row.subName}</span>
+                  </td>
+                  {columns.map(col => {
+                    const mins = getCumulativeSummaryCellMinutes(row, col);
+                    return (
+                      <td key={col.key} className={`td-mins ${col.type === "week" ? "td-week-total" : ""} ${col.isToday ? "today" : ""} ${mins > 0 ? "has-time" : ""}`}>
+                        {col.type === "week" ? (mins > 0 ? fmtTime(mins) : "—") : fmtCell(mins)}
+                      </td>
+                    );
+                  })}
+                  <td className="td-total">{rowVisibleTotal > 0 ? fmtTime(rowVisibleTotal) : "—"}</td>
+                </tr>
+              );
+            })}
+            {legacyTotal > 0 && (
+              <tr className="legacy-row">
+                <td className="td-task">Pontaj istoric</td>
+                {columns.map(col => (
+                  <td key={col.key} className="td-mins">—</td>
+                ))}
+                <td className="td-total" title="Ore înregistrate ?nainte de pontajul pe zile">{fmtTime(legacyTotal)}</td>
+              </tr>
+            )}
+          </tbody>
+          <tfoot>
+            <tr className="timesheet-foot">
+              <td className="td-foot-label">Total</td>
+              {colTotals.map((mins, ci) => (
+                <td key={columns[ci].key} className={`td-mins td-foot ${columns[ci].type === "week" ? "td-week-total" : ""} ${columns[ci].isToday ? "today" : ""}`}>
+                  {mins > 0 ? fmtTime(mins) : "—"}
+                </td>
+              ))}
+              <td className="td-total td-foot-week">{fmtTime(weekTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div className="mobile-week-list">
+        {mobileDays.map(day => (
+          <div key={day.key} className={`mobile-day-card ${day.isToday ? "today" : ""}`}>
+            <div className="mobile-day-head">
+              <div>
+                <h4>{day.label}</h4>
+                <span>{day.day.dateKey}</span>
+              </div>
+              <strong>{day.total > 0 ? fmtTime(day.total) : "—"}</strong>
+            </div>
+            {day.entries.length > 0 ? (
+              <div className="mobile-day-entries">
+                {day.entries.map(entry => (
+                  <div key={`${day.key}-${entry.activity}-${entry.subName}`} className="mobile-day-entry">
+                    <div>
+                      <span className={`pill pill-${entry.actClass}`}>{entry.activity}</span>
+                      <p>{entry.subName}</p>
+                    </div>
+                    <strong>{fmtTime(entry.minutes)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mobile-day-empty">Fără pontaj în ziua aceasta.</p>
+            )}
+          </div>
+        ))}
+        {legacyTotal > 0 && (
+          <div className="mobile-day-card legacy">
+            <div className="mobile-day-head">
+              <div>
+                <h4>Pontaj istoric</h4>
+                <span>?nainte de pontajul pe zile</span>
+              </div>
+              <strong>{fmtTime(legacyTotal)}</strong>
+            </div>
+          </div>
+        )}
+      </div>
+      {legacyTotal > 0 && (
+        <p className="week-legacy-note">
+          Totalul cumulat include {fmtTime(legacyTotal)} din pontajul istoric, neinclus în zilele saptamânii curente.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function hasWorkerTimeOnProject(state, projectId, workerId) {
   return Object.entries(state.timeLogs).some(([key, entry]) =>
     key.startsWith(`${projectId}_`) && key.endsWith(`_${workerId}`) && totalLogMinutes(entry) > 0
   );
 }
 
+function isProjectPinnedForWorker(state, workerId, projectId) {
+  return Boolean(state.pinnedWorkProjects?.[workerId]?.includes(projectId));
+}
+
+function togglePinnedProjectForWorker(setState, workerId, projectId) {
+  setState(s => {
+    const current = s.pinnedWorkProjects?.[workerId] ?? [];
+    const nextForWorker = current.includes(projectId)
+      ? current.filter(id => id !== projectId)
+      : [...current, projectId];
+
+    return {
+      ...s,
+      pinnedWorkProjects: {
+        ...(s.pinnedWorkProjects ?? {}),
+        [workerId]: nextForWorker,
+      },
+    };
+  });
+}
+
 function buildAdminActivityWeeks(state, projectId, activityName, currentWeekKey) {
-  const weekKeys = new Set([currentWeekKey]);
+  const weekKeys = new Set([currentWeekKey, ...getCurrentMonthWeekKeys()]);
   const prefix = `${projectId}_${activityName}_`;
   for (const [key, entry] of Object.entries(state.timeLogs)) {
     if (!key.startsWith(prefix)) continue;
@@ -722,6 +1224,20 @@ function AdminProjectActivityTable({ project, activityName, workers }) {
   );
   const visibleTotal = colTotals.reduce((sum, mins) => sum + mins, 0);
   const legacyTotal = rows.reduce((sum, row) => sum + (row.legacyTotal || 0), 0);
+  const mobileWeek = weeks.find(week => week.key === safeExpandedWeekKey) ?? weeks[0];
+  const mobileAdminDays = (mobileWeek?.days ?? []).map(day => {
+    const dayColumn = { type: "day", key: day.dateKey, label: day.head, isToday: day.isToday, day, week: mobileWeek };
+    return {
+      ...dayColumn,
+      total: rows.reduce((sum, row) => sum + getAdminActivityCellMinutes(row, dayColumn), 0),
+      entries: rows
+        .map(row => ({
+          subName: row.subName,
+          minutes: getAdminActivityCellMinutes(row, dayColumn),
+        }))
+        .filter(entry => entry.minutes > 0),
+    };
+  });
 
   return (
     <section className={`admin-project-activity act-${actClass} ${isOpen ? "open" : ""}`}>
@@ -731,7 +1247,7 @@ function AdminProjectActivityTable({ project, activityName, workers }) {
           <span>{activityName}</span>
         </span>
         <span className={`admin-activity-hours ${activityTotal > 0 ? "has-time" : ""}`}>{fmtTime(activityTotal)}</span>
-        <span className="admin-activity-chevron">{isOpen ? "−" : "+"}</span>
+        <span className="admin-activity-chevron">{isOpen ? "-" : "+"}</span>
       </button>
 
       {isOpen && (
@@ -744,7 +1260,7 @@ function AdminProjectActivityTable({ project, activityName, workers }) {
             <table className="timesheet admin-project-timesheet">
               <thead>
                 <tr>
-                  <th className="th-task"><span>Subactivitate</span><small>Total echipă</small></th>
+                  <th className="th-task"><span>Subactivitate</span><small>Total echipa</small></th>
                   {columns.map(col => (
                     <th key={col.key} className={`${col.type === "week" ? "th-week collapsed" : "th-day"} ${col.isToday ? "today" : ""}`} title={col.label}>
                       {col.type === "week" ? (
@@ -790,7 +1306,7 @@ function AdminProjectActivityTable({ project, activityName, workers }) {
                     {columns.map(col => (
                       <td key={col.key} className="td-mins">—</td>
                     ))}
-                    <td className="td-total" title="Ore înregistrate înainte de pontajul pe zile">{fmtTime(legacyTotal)}</td>
+                    <td className="td-total" title="Ore înregistrate ?nainte de pontajul pe zile">{fmtTime(legacyTotal)}</td>
                   </tr>
                 )}
               </tbody>
@@ -807,9 +1323,49 @@ function AdminProjectActivityTable({ project, activityName, workers }) {
               </tfoot>
             </table>
           </div>
+          <div className="mobile-admin-week-tabs" role="tablist" aria-label="Saptamâni pontaj">
+            {weeks.map(week => (
+              <button
+                key={week.key}
+                type="button"
+                className={week.key === safeExpandedWeekKey ? "active" : ""}
+                onClick={() => setExpandedWeekKey(week.key)}
+              >
+                {week.label}
+              </button>
+            ))}
+          </div>
+          <div className="mobile-admin-day-list">
+            {mobileAdminDays.map(day => (
+              <div key={day.key} className={`mobile-day-card ${day.isToday ? "today" : ""}`}>
+                <div className="mobile-day-head">
+                  <div>
+                    <h4>{day.label}</h4>
+                    <span>{day.day.dateKey}</span>
+                  </div>
+                  <strong>{day.total > 0 ? fmtTime(day.total) : "—"}</strong>
+                </div>
+                {day.entries.length > 0 ? (
+                  <div className="mobile-day-entries">
+                    {day.entries.map(entry => (
+                      <div key={`${day.key}-${entry.subName}`} className="mobile-day-entry">
+                        <div>
+                          <span className={`pill pill-${actClass}`}>{activityName}</span>
+                          <p>{entry.subName}</p>
+                        </div>
+                        <strong>{fmtTime(entry.minutes)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mobile-day-empty">Fără pontaj în ziua aceasta.</p>
+                )}
+              </div>
+            ))}
+          </div>
           {legacyTotal > 0 && (
             <p className="week-legacy-note">
-              Total activitate ({fmtTime(activityTotal)}) include {fmtTime(legacyTotal)} din pontajul istoric, neinclus în zilele săptămânilor.
+              Total activitate ({fmtTime(activityTotal)}) include {fmtTime(legacyTotal)} din pontajul istoric, neinclus în zilele saptamânilor.
             </p>
           )}
         </div>
@@ -839,6 +1395,10 @@ function ProjectView() {
       </div>
       <div className="page-header">
         <div><h2>{project.name}</h2><p className="page-sub">Client: <strong>{project.client}</strong></p></div>
+        <button type="button" className="btn-ghost export-btn" onClick={() => exportAdminProjectMonthXls(state, project, workers, visibleActivities)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>
+          Export XLS {getLastCompletedMonth().label}
+        </button>
       </div>
       <div className="admin-project-activity-list">
         {visibleActivities.map(actName => (
@@ -854,12 +1414,136 @@ function ProjectView() {
   );
 }
 
+function TodayTimeView() {
+  const { state, setState, currentUser, setView, setSelectedProject, notify } = useContext(AppContext);
+  const activeProjects = state.projects.filter(p => !isProjectArchived(state, p));
+  const visibleActivities = ["Administrativ", currentUser.activity].filter(Boolean);
+  const pinnedIds = state.pinnedWorkProjects?.[currentUser.id] ?? [];
+  const pinnedProjects = pinnedIds
+    .map(id => activeProjects.find(project => project.id === id) ?? state.projects.find(project => project.id === id))
+    .filter(Boolean);
+  const availableProjects = activeProjects.filter(project => !pinnedIds.includes(project.id));
+  const today = dateKeyLocal(new Date());
+  const todayTotal = pinnedProjects.reduce((sum, project) => {
+    return sum + visibleActivities.reduce((activitySum, activityName) => {
+      return activitySum + getSubactivities(state, activityName).reduce((subSum, sub) => {
+        const entry = state.timeLogs[timeLogKey(project.id, activityName, sub.id, currentUser.id)];
+        return subSum + minutesOnDate(entry, today);
+      }, 0);
+    }, 0);
+  }, 0);
+
+  function toggleProject(projectId) {
+    togglePinnedProjectForWorker(setState, currentUser.id, projectId);
+    notify(isProjectPinnedForWorker(state, currentUser.id, projectId) ? "Proiect scos din Pontaj." : "Proiect adăugat în Pontaj.");
+  }
+
+  function openProject(projectId) {
+    setSelectedProject(projectId);
+    setView("project");
+  }
+
+  function renderPinnedProject(project) {
+    const projectTotal = getProjectTotalMinutes(state, project.id, currentUser.id);
+    const todayMins = visibleActivities.reduce((activitySum, activityName) => {
+      return activitySum + getSubactivities(state, activityName).reduce((subSum, sub) => {
+        const entry = state.timeLogs[timeLogKey(project.id, activityName, sub.id, currentUser.id)];
+        return subSum + minutesOnDate(entry, today);
+      }, 0);
+    }, 0);
+
+    return (
+      <article key={project.id} className="today-project-card">
+        <button type="button" className="today-project-main" onClick={() => openProject(project.id)}>
+          <div className="project-initials sm">{project.name[0]}{project.name.split(" ")[1]?.[0] || ""}</div>
+          <div>
+            <h3>{project.name}</h3>
+            <p>{project.client}</p>
+          </div>
+        </button>
+        <div className="today-project-meta">
+          <span>Azi <strong>{fmtTime(todayMins)}</strong></span>
+          <span>Total <strong>{fmtTime(projectTotal)}</strong></span>
+        </div>
+        <div className="today-project-actions">
+          <button type="button" className="btn-primary" onClick={() => openProject(project.id)}>Ponteaza</button>
+          <label className="today-pin active">
+            <input type="checkbox" checked onChange={() => toggleProject(project.id)} />
+            <span>În Pontaj</span>
+          </label>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header today-header">
+        <div>
+          <h2>Pontaj azi</h2>
+          <p className="page-sub">{new Date().toLocaleDateString("ro-RO", { weekday: "long", day: "2-digit", month: "long" })}</p>
+        </div>
+        <div className={`today-total ${todayTotal > 0 ? "has-time" : ""}`}>
+          <span>Total azi</span>
+          <strong>{fmtTime(todayTotal)}</strong>
+        </div>
+      </div>
+
+      <section className="today-section">
+        <div className="project-section-head">
+          <h3>În Pontaj</h3>
+          <span>{pinnedProjects.length}</span>
+        </div>
+        {pinnedProjects.length === 0 ? (
+          <div className="empty-state small">
+            <span>Bifează proiecte din lista de mai jos ca să apară aici. Rămân în Pontaj până le debifezi manual.</span>
+          </div>
+        ) : (
+          <div className="today-project-list">
+            {pinnedProjects.map(renderPinnedProject)}
+          </div>
+        )}
+      </section>
+
+      <CumulativeWorkerWeekSummary
+        projects={pinnedProjects}
+        visibleActivities={visibleActivities}
+        title="Istoric pontaj"
+      />
+
+      <section className="today-section">
+        <div className="project-section-head">
+          <h3>Adaugă proiecte</h3>
+          <span>{availableProjects.length}</span>
+        </div>
+        {availableProjects.length === 0 ? (
+          <div className="empty-state small"><span>Toate proiectele active sunt deja în Pontaj.</span></div>
+        ) : (
+          <div className="today-add-list">
+            {availableProjects.map(project => (
+              <label key={project.id} className="today-add-row">
+                <input type="checkbox" checked={false} onChange={() => toggleProject(project.id)} />
+                <span>
+                  <strong>{project.name}</strong>
+                  <small>{project.client}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function WorkerProjectPontaj({ project, visibleActivities }) {
   const { state, setState, currentUser, setView, setSelectedProject, notify } = useContext(AppContext);
   const [timeMode, setTimeMode] = useState("add");
+  const [selectedMinutes, setSelectedMinutes] = useState(() => getTimeButtons(state)[0] || 30);
   const [favoritePulseKey, setFavoritePulseKey] = useState(null);
   const isSubtractMode = timeMode === "subtract";
   const timeButtons = getTimeButtons(state);
+  const safeSelectedMinutes = timeButtons.includes(selectedMinutes) ? selectedMinutes : (timeButtons[0] || 30);
   const today = dateKeyLocal(new Date());
   const dateLabel = new Date().toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
   const favoriteMap = state.favoriteSubactivities ?? {};
@@ -914,18 +1598,19 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
     });
   }
 
-  function adjustTime(activityName, subId, mins) {
+  function adjustTime(activityName, subId) {
     const key = timeLogKey(project.id, activityName, subId, currentUser.id);
+    const mins = safeSelectedMinutes;
     const delta = isSubtractMode ? -mins : mins;
     const prev = state.timeLogs[key];
     const todayBefore = minutesOnDate(prev, today);
 
     if (isSubtractMode && todayBefore === 0) {
-      notify("Nu ai timp de scăzut azi pe această subactivitate.", "info");
+      notify("Nu ai timp de scazut azi pe aceasta subactivitate.", "info");
       return;
     }
     if (isSubtractMode && todayBefore < mins) {
-      notify(`Ai doar ${fmtTime(todayBefore)} de scăzut azi pe această subactivitate.`, "info");
+      notify(`Ai doar ${fmtTime(todayBefore)} de scazut azi pe aceasta subactivitate.`, "info");
       return;
     }
 
@@ -941,7 +1626,7 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
       return { ...s, timeLogs: nextLogs };
     });
 
-    notify(isSubtractMode ? `−${mins} min scăzute!` : `+${mins} min adăugate!`);
+    notify(isSubtractMode ? `-${mins} min scăzute!` : `+${mins} min adăugate!`);
   }
 
   function getTime(activityName, subId) {
@@ -949,7 +1634,7 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
   }
 
   return (
-    <div className="page page-wide">
+    <div className="page page-wide pontaj-page">
       <div className="breadcrumb">
         <button onClick={() => { setView("dashboard"); setSelectedProject(null); }}>Proiecte</button>
         <span>/</span><span className="breadcrumb-current">{project.name}</span>
@@ -970,31 +1655,50 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
         ))}
       </div>
 
-      <div className="time-mode-bar pontaj-mode-bar">
-        <span className="time-mode-label">Mod pontaj</span>
-        <span className="time-mode-hint">{isSubtractMode ? "Scade timp la click" : "Adaugă timp la click"}</span>
-        {reachedDailyTarget && (
-          <span className="daily-target-note">
-            Azi: {fmtTime(todayTotal)} · prag 8h atins
-          </span>
-        )}
-        <div className="time-mode-switch" role="group" aria-label="Mod pontaj">
-          <button
-            type="button"
-            className={`time-mode-btn ${!isSubtractMode ? "active" : ""}`}
-            onClick={() => setTimeMode("add")}
-            aria-pressed={!isSubtractMode}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className={`time-mode-btn ${isSubtractMode ? "active" : ""}`}
-            onClick={() => setTimeMode("subtract")}
-            aria-pressed={isSubtractMode}
-          >
-            −
-          </button>
+      <div className="pontaj-mode-slot">
+        <div className="time-mode-bar pontaj-mode-bar">
+          <div className="pontaj-sticky-context">
+            <span className="time-mode-label">Pontaj</span>
+            <strong>{project.name}</strong>
+            <small>Azi {fmtTime(todayTotal)}</small>
+          </div>
+          <div className="time-amount-picker" role="radiogroup" aria-label="Cantitate timp">
+            {timeButtons.map(mins => (
+              <label key={mins} className={`time-amount-option ${safeSelectedMinutes === mins ? "active" : ""}`}>
+                <input
+                  type="radio"
+                  name="pontaj-minutes"
+                  checked={safeSelectedMinutes === mins}
+                  onChange={() => setSelectedMinutes(mins)}
+                />
+                <span>{mins}</span>
+              </label>
+            ))}
+          </div>
+          <span className="time-mode-hint">{isSubtractMode ? "Scade timp la click" : "Adaugă timp la click"}</span>
+          {reachedDailyTarget && (
+            <span className="daily-target-note">
+              Azi: {fmtTime(todayTotal)} · prag 8h atins
+            </span>
+          )}
+          <div className="time-mode-switch" role="group" aria-label="Mod pontaj">
+            <button
+              type="button"
+              className={`time-mode-btn ${!isSubtractMode ? "active" : ""}`}
+              onClick={() => setTimeMode("add")}
+              aria-pressed={!isSubtractMode}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className={`time-mode-btn ${isSubtractMode ? "active" : ""}`}
+              onClick={() => setTimeMode("subtract")}
+              aria-pressed={isSubtractMode}
+            >
+              -
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1012,7 +1716,7 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
                     <td className="pontaj-sub-cell">
                       <span className="pontaj-sub-name muted">Nicio subactivitate definită</span>
                     </td>
-                    {timeButtons.map(m => <td key={m} className="pontaj-time-cell" />)}
+                    <td className="pontaj-time-cell" />
                     <td className="pontaj-total-cell">—</td>
                   </tr>
                 );
@@ -1037,20 +1741,19 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
                         title={favorite ? "Scoate de la favorite" : "Marchează ca favorit"}
                         onClick={() => toggleFavorite(activityName, sub.id)}
                       >
-                        ★
+                        {favorite ? "\u2605" : "\u2606"}
                       </button>
                     </td>
-                    {timeButtons.map(m => (
-                      <td key={m} className="pontaj-time-cell">
-                        <button
-                          type="button"
-                          className={`btn-time act-${actClass} ${isSubtractMode ? "subtract" : ""}`}
-                          onClick={() => adjustTime(activityName, sub.id, m)}
-                        >
-                          {isSubtractMode ? "−" : "+"}{m}min
-                        </button>
-                      </td>
-                    ))}
+                    <td className="pontaj-time-cell">
+                      <button
+                        type="button"
+                        className={`btn-time btn-time-single act-${actClass} ${isSubtractMode ? "subtract" : ""}`}
+                        onClick={() => adjustTime(activityName, sub.id)}
+                        aria-label={`${isSubtractMode ? "Scade" : "Adaugă"} ${safeSelectedMinutes} minute`}
+                      >
+                        {safeSelectedMinutes}
+                      </button>
+                    </td>
                     <td className={`pontaj-total-cell ${myTime > 0 ? "has-time" : ""}`}>{fmtTime(myTime)}</td>
                   </tr>
                 );
@@ -1095,20 +1798,18 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
                     title={favorite ? "Scoate de la favorite" : "Marchează ca favorit"}
                     onClick={() => toggleFavorite(activityName, sub.id)}
                   >
-                    ★
+                    {favorite ? "\u2605" : "\u2606"}
                   </button>
                 </div>
                 <div className="mobile-pontaj-actions">
-                  {timeButtons.map(m => (
-                    <button
-                      key={m}
-                      type="button"
-                      className={`btn-time act-${actClass} ${isSubtractMode ? "subtract" : ""}`}
-                      onClick={() => adjustTime(activityName, sub.id, m)}
-                    >
-                      {isSubtractMode ? "−" : "+"}{m}min
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    className={`btn-time btn-time-single act-${actClass} ${isSubtractMode ? "subtract" : ""}`}
+                    onClick={() => adjustTime(activityName, sub.id)}
+                    aria-label={`${isSubtractMode ? "Scade" : "Adaugă"} ${safeSelectedMinutes} minute`}
+                  >
+                    {safeSelectedMinutes}
+                  </button>
                   <span className={`mobile-pontaj-total ${myTime > 0 ? "has-time" : ""}`}>{fmtTime(myTime)}</span>
                 </div>
               </div>
@@ -1117,7 +1818,6 @@ function WorkerProjectPontaj({ project, visibleActivities }) {
         })}
       </div>
 
-      <WorkerWeekSummary project={project} visibleActivities={visibleActivities} />
     </div>
   );
 }
@@ -1137,7 +1837,7 @@ function AdminActivityTimesheet({ projectId, activityName, subactivities, worker
   return (
     <section className="week-summary admin-activity-sheet">
       <div className="week-summary-header">
-        <h3>Pontaj echipă</h3>
+        <h3>Pontaj echipa</h3>
         <span className="week-total-badge">Total activitate: <strong>{fmtTime(grandTotal)}</strong></span>
       </div>
       <div className="timesheet-wrap">
@@ -1214,7 +1914,7 @@ function ActivityView() {
     const todayBefore = minutesOnDate(prev, today);
 
     if (isSubtractMode && todayBefore === 0) {
-      notify("Nu ai timp de scăzut azi pe această subactivitate.", "info");
+      notify("Nu ai timp de scazut azi pe aceasta subactivitate.", "info");
       return;
     }
 
@@ -1230,7 +1930,7 @@ function ActivityView() {
       return { ...s, timeLogs: nextLogs };
     });
 
-    notify(isSubtractMode ? `−${mins} min scăzute!` : `+${mins} min adăugate!`);
+    notify(isSubtractMode ? `-${mins} min scăzute!` : `+${mins} min adăugate!`);
   }
 
   function getTime(subId) {
@@ -1281,7 +1981,7 @@ function ActivityView() {
               onClick={() => setTimeMode("subtract")}
               aria-pressed={isSubtractMode}
             >
-              −
+              -
             </button>
           </div>
           <span className="time-mode-hint">{isSubtractMode ? "Scade timp la click" : "Adaugă timp la click"}</span>
@@ -1306,7 +2006,7 @@ function ActivityView() {
                       className={`btn-time act-${actClass} ${isSubtractMode ? "subtract" : ""}`}
                       onClick={() => adjustTime(sub.id, m)}
                     >
-                      {isSubtractMode ? "−" : "+"}{m}min
+                      {isSubtractMode ? "-" : "+"}{m}min
                     </button>
                   ))}
                   <span className={`time-badge ${myTime > 0 ? "has-time" : ""}`}>
@@ -1337,7 +2037,7 @@ function ConfigView() {
     const mins = parseInt(newBtnMins, 10);
     if (!mins || mins < 1 || mins > 480) return;
     const current = getTimeButtons(state);
-    if (current.includes(mins)) { notify("Acest buton există deja.", "info"); return; }
+    if (current.includes(mins)) { notify("Acest buton exista deja.", "info"); return; }
     setState(s => ({ ...s, timeButtons: [...getTimeButtons(s), mins] }));
     setNewBtnMins("");
     notify("Buton adăugat!");
@@ -1355,7 +2055,7 @@ function ConfigView() {
     const name = newActivity.trim();
     if (!name) return;
     if (activityTypes.some(a => a.toLowerCase() === name.toLowerCase())) {
-      notify("Activitatea există deja.", "info");
+      notify("Activitatea exista deja.", "info");
       return;
     }
     setState(s => ({
@@ -1364,12 +2064,12 @@ function ConfigView() {
       subactivitiesByActivity: { ...getSubactivitiesCatalog(s), [name]: [] },
     }));
     setNewActivity("");
-    notify("Activitate adăugată!");
+    notify("Activitate adăugata!");
   }
 
   function removeActivityType(actName) {
     const usedByWorker = state.users.some(u => u.role === "worker" && u.activity === actName);
-    if (usedByWorker) { notify("Activitatea e folosită de un worker.", "info"); return; }
+    if (usedByWorker) { notify("Activitatea e folosita de un worker.", "info"); return; }
     if (activityTypes.length <= 1) { notify("Trebuie să rămână cel puțin o activitate.", "info"); return; }
     confirm(`Ștergi activitatea „${actName}”?`, () => {
       setState(s => {
@@ -1395,7 +2095,7 @@ function ConfigView() {
       },
     }));
     setNewSubByAct(prev => ({ ...prev, [actName]: "" }));
-    notify("Subactivitate adăugată!");
+    notify("Subactivitate adăugata!");
   }
 
   function deleteSubactivity(actName, subId) {
@@ -1427,7 +2127,7 @@ function ConfigView() {
 
       {tab === "time" && (
         <div className="config-panel">
-          <p className="config-panel-desc">Aceste butoane apar la workeri când pontează timp pe o subactivitate.</p>
+          <p className="config-panel-desc">Aceste butoane apar la workeri când ponteaza timp pe o subactivitate.</p>
           <div className="config-btn-list">
             {timeButtons.map(mins => (
               <div key={mins} className="config-btn-item">
@@ -1457,7 +2157,7 @@ function ConfigView() {
         <div className="config-panel">
           <section className="config-section">
             <h3 className="config-section-title">Tipuri de activități</h3>
-            <p className="config-panel-desc">Lista globală de activități. „Administrativ” e vizibil tuturor workerilor.</p>
+            <p className="config-panel-desc">Lista globală de activități. "Administrativ" e vizibil tuturor workerilor.</p>
             <div className="config-act-types">
               {activityTypes.map(act => (
                 <div key={act} className="config-act-type-row">
@@ -1471,7 +2171,7 @@ function ConfigView() {
               ))}
             </div>
             <div className="add-row">
-              <input value={newActivity} onChange={e => setNewActivity(e.target.value)} onKeyDown={e => e.key === "Enter" && addActivityType()} placeholder="Activitate nouă (ex: Zugrăveli)" />
+              <input value={newActivity} onChange={e => setNewActivity(e.target.value)} onKeyDown={e => e.key === "Enter" && addActivityType()} placeholder="Activitate noua (ex: Zugraveli)" />
               <button className="btn-primary" onClick={addActivityType}>Adaugă activitate</button>
             </div>
           </section>
@@ -1505,7 +2205,7 @@ function ConfigView() {
                       value={newSubByAct[actName] || ""}
                       onChange={e => setNewSubByAct(prev => ({ ...prev, [actName]: e.target.value }))}
                       onKeyDown={e => e.key === "Enter" && addSubactivity(actName)}
-                      placeholder="Subactivitate nouă..."
+                      placeholder="Subactivitate noua..."
                     />
                     <button className="btn-primary" onClick={() => addSubactivity(actName)}>Adaugă</button>
                   </div>
@@ -1529,7 +2229,7 @@ function WorkersView() {
   }
 
   function deleteWorker(id) {
-    confirm("Ești sigur că vrei să ștergi acest worker?", () => {
+    confirm("Ești sigur că vrei să Ștergi acest worker?", () => {
       setState(s => ({ ...s, users: s.users.filter(u => u.id !== id) }));
       notify("Worker șters.", "info");
     });
@@ -1586,6 +2286,10 @@ function WorkerProjectsView() {
           <h2>{worker.name}</h2>
           <p className="page-sub">@{worker.username} · {worker.activity || "Administrativ"}</p>
         </div>
+        <button type="button" className="btn-ghost export-btn" onClick={() => exportWorkerMonthXls(state, worker, projects)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>
+          Export XLS {getLastCompletedMonth().label}
+        </button>
       </div>
       {projects.length === 0 ? (
         <div className="empty-state small"><span>Workerul nu are pontaje pe niciun proiect.</span></div>
@@ -1631,6 +2335,10 @@ function WorkerProjectTimesheetView() {
           <h2>{project.name}</h2>
           <p className="page-sub">{worker.name} · <strong>{fmtTime(getProjectTotalMinutes(state, project.id, worker.id))}</strong></p>
         </div>
+        <button type="button" className="btn-ghost export-btn" onClick={() => exportWorkerMonthXls(state, worker, [project])}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>
+          Export XLS {getLastCompletedMonth().label}
+        </button>
       </div>
       <WorkerWeekSummary
         project={project}
@@ -1647,6 +2355,8 @@ function ProfileView() {
   const [password, setPassword] = useState("");
   const [passwordAgain, setPasswordAgain] = useState("");
   const [companyName, setCompanyName] = useState(state.settings?.companyName ?? "");
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [companyError, setCompanyError] = useState("");
   const isAdmin = currentUser?.role === "admin";
   const companyLocked = Boolean(state.settings?.companyName);
 
@@ -1664,26 +2374,36 @@ function ProfileView() {
     const reader = new FileReader();
     reader.onload = () => {
       updateUser({ photo: reader.result });
-      notify("Poza de profil a fost salvată.");
+      notify("Poza de profil a fost salvata.");
     };
     reader.readAsDataURL(file);
   }
 
   function savePassword() {
-    if (!password.trim()) return notify("Introdu parola nouă.", "info");
-    if (password.length < 4) return notify("Parola trebuie să aibă cel puțin 4 caractere.", "info");
-    if (password !== passwordAgain) return notify("Parolele nu coincid.", "info");
+    const nextErrors = {};
+    if (!password.trim()) nextErrors.password = "Introdu parola noua.";
+    else if (password.length < 4) nextErrors.password = "Parola trebuie să aibă cel puțin 4 caractere.";
+    if (password && password !== passwordAgain) nextErrors.passwordAgain = "Parolele nu coincid.";
+    if (Object.keys(nextErrors).length > 0) {
+      setPasswordErrors(nextErrors);
+      return;
+    }
     updateUser({ password });
     setPassword("");
     setPasswordAgain("");
+    setPasswordErrors({});
     notify("Parola a fost schimbată.");
   }
 
   function saveCompany() {
     const value = companyName.trim();
     if (!isAdmin || companyLocked) return;
-    if (!value) return notify("Completează numele firmei.", "info");
+    if (!value) {
+      setCompanyError("Completează numele firmei.");
+      return;
+    }
     setState(s => ({ ...s, settings: { ...(s.settings ?? {}), companyName: value } }));
+    setCompanyError("");
     notify("Numele firmei a fost setat.");
   }
 
@@ -1704,7 +2424,7 @@ function ProfileView() {
             <p>@{currentUser.username}</p>
           </div>
           <label className="btn-ghost profile-photo-btn">
-            Schimbă poza
+            Schimba poza
             <input type="file" accept="image/*" onChange={handlePhoto} />
           </label>
         </section>
@@ -1720,17 +2440,19 @@ function ProfileView() {
         </section>
 
         <section className="profile-card">
-          <h3>Schimbare parolă</h3>
+          <h3>Schimbare parola</h3>
           <div className="field">
-            <label>Parolă nouă</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+            <label>Parolă nou?</label>
+            <input type="password" value={password} onChange={e => { setPassword(e.target.value); setPasswordErrors(errors => ({ ...errors, password: "" })); }} placeholder="••••••••" />
+            {passwordErrors.password && <p className="field-error">{passwordErrors.password}</p>}
           </div>
           <div className="field">
-            <label>Confirmă parola</label>
-            <input type="password" value={passwordAgain} onChange={e => setPasswordAgain(e.target.value)} placeholder="••••••••" />
+            <label>Confirma parola</label>
+            <input type="password" value={passwordAgain} onChange={e => { setPasswordAgain(e.target.value); setPasswordErrors(errors => ({ ...errors, passwordAgain: "" })); }} placeholder="••••••••" />
+            {passwordErrors.passwordAgain && <p className="field-error">{passwordErrors.passwordAgain}</p>}
           </div>
           <div className="form-actions">
-            <button className="btn-primary" onClick={savePassword}>Salvează parola</button>
+            <button className="btn-primary" onClick={savePassword}>Salveaza parola</button>
           </div>
         </section>
 
@@ -1741,17 +2463,18 @@ function ProfileView() {
               <label>Numele firmei</label>
               <input
                 value={companyName}
-                onChange={e => setCompanyName(e.target.value)}
+                onChange={e => { setCompanyName(e.target.value); setCompanyError(""); }}
                 placeholder="ex: SC Electric Pro SRL"
                 disabled={companyLocked}
               />
+              {companyError && <p className="field-error">{companyError}</p>}
               <p className="field-note">
                 {companyLocked ? "Numele firmei este setat și apare la toți workerii." : "Se poate seta o singură dată de administrator."}
               </p>
             </div>
             {!companyLocked && (
               <div className="form-actions">
-                <button className="btn-primary" onClick={saveCompany}>Setează firma</button>
+                <button className="btn-primary" onClick={saveCompany}>Seteaza firma</button>
               </div>
             )}
           </section>
@@ -1765,9 +2488,16 @@ function NewProjectForm() {
   const { state, setState, setView, notify } = useContext(AppContext);
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
+  const [errors, setErrors] = useState({});
   const activityTypes = getActivityTypes(state);
   function submit() {
-    if (!name.trim() || !client.trim()) return;
+    const nextErrors = {};
+    if (!name.trim()) nextErrors.name = "Completează numele proiectului.";
+    if (!client.trim()) nextErrors.client = "Completează clientul.";
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
     setState(s => ({ ...s, projects: [...s.projects, { id: uid(), name: name.trim(), client: client.trim(), createdAt: dateKeyLocal(new Date()) }] }));
     notify("Proiect creat cu succes!");
     setView("dashboard");
@@ -1779,16 +2509,18 @@ function NewProjectForm() {
         <h2>Proiect nou</h2>
         <div className="field">
           <label>Numele proiectului</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="ex: Renovare Sediu Central" autoFocus />
+          <input value={name} onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: "" })); }} placeholder="ex: Renovare Sediu Central" autoFocus />
+          {errors.name && <p className="field-error">{errors.name}</p>}
         </div>
         <div className="field">
           <label>Client</label>
-          <input value={client} onChange={e => setClient(e.target.value)} placeholder="ex: SC Construcții Alpha SRL" />
+          <input value={client} onChange={e => { setClient(e.target.value); setErrors(prev => ({ ...prev, client: "" })); }} placeholder="ex: SC Construcșii Alpha SRL" />
+          {errors.client && <p className="field-error">{errors.client}</p>}
         </div>
         <div className="field-info"><p>Proiectul folosește activitățile și subactivitățile globale din Configurare: <strong>{activityTypes.join(", ")}</strong>.</p></div>
         <div className="form-actions">
-          <button className="btn-ghost" onClick={() => setView("dashboard")}>Anulează</button>
-          <button className="btn-primary" onClick={submit}>Creează proiect</button>
+          <button className="btn-ghost" onClick={() => setView("dashboard")}>Anuleaza</button>
+          <button className="btn-primary" onClick={submit}>Creeaza proiect</button>
         </div>
       </div>
     </div>
@@ -1803,18 +2535,19 @@ function NewWorkerForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [lastInvite, setLastInvite] = useState(null);
+  const [errors, setErrors] = useState({});
   const workerActivities = getActivityTypes(state).filter(a => a !== "Administrativ");
   const [activity, setActivity] = useState(workerActivities[0] || "Electric");
 
   function buildInviteMessage(workerName, workerUsername, workerPassword) {
     return `Salut ${workerName},
 
-Ți-am creat contul în Times.
+și-am creat contul în TimeS.
 
 User: ${workerUsername}
 Parolă: ${workerPassword}
 
-Te poți autentifica în aplicație cu datele de mai sus.`;
+Te poși autentifica în aplicașie cu datele de mai sus.`;
   }
 
   async function copyInvite() {
@@ -1823,7 +2556,7 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
       await navigator.clipboard.writeText(lastInvite.body);
       notify("Mesajul a fost copiat.");
     } catch {
-      notify("Nu am putut copia automat. Selectează textul din casetă.", "info");
+      notify("Nu am putut copia automat. Selecteaza textul din caseta.", "info");
     }
   }
 
@@ -1848,16 +2581,15 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
     const trimmedUsername = username.trim();
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
-    if (!trimmedName || !trimmedUsername || !trimmedEmail || !trimmedPassword) {
-      notify("Completează numele, username-ul, emailul și parola.", "info");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      notify("Introdu o adresă de email validă.", "info");
-      return;
-    }
-    if (state.users.some(u => u.username.toLowerCase() === trimmedUsername.toLowerCase())) {
-      notify("Username-ul este deja folosit.", "info");
+    const nextErrors = {};
+    if (!trimmedName) nextErrors.name = "Completează numele complet.";
+    if (!trimmedUsername) nextErrors.username = "Completează username-ul.";
+    else if (state.users.some(u => u.username.toLowerCase() === trimmedUsername.toLowerCase())) nextErrors.username = "Username-ul este deja folosit.";
+    if (!trimmedEmail) nextErrors.email = "Completează adresa de email.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) nextErrors.email = "Introdu o adresă de email validă.";
+    if (!trimmedPassword) nextErrors.password = "Completează parola.";
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
     setState(s => ({
@@ -1880,7 +2612,7 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
 
     setLastInvite({
       email: trimmedEmail,
-      subject: "Contul tău Times",
+      subject: "Contul tau TimeS",
       body: buildInviteMessage(trimmedName, trimmedUsername, trimmedPassword),
     });
 
@@ -1888,7 +2620,8 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
     setUsername("");
     setEmail("");
     setPassword("");
-    notify("Worker creat. Mesajul pentru email este pregătit.");
+    setErrors({});
+    notify("Worker creat. Mesajul pentru email este pregatit.");
     requestAnimationFrame(() => nameInputRef.current?.focus());
   }
   return (
@@ -1898,19 +2631,19 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
           <div className="invite-modal">
             <div className="invite-modal-header">
               <div>
-                <h3 id="invite-modal-title">Email pregătit</h3>
+                <h3 id="invite-modal-title">Email pregatit</h3>
                 <p>{lastInvite.email}</p>
               </div>
               <button className="btn-icon" type="button" aria-label="Închide" onClick={closeInvitePopup}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </button>
             </div>
-            <p className="invite-modal-note">Trimite mesajul din Gmail, din aplicația de mail sau copiază textul.</p>
+            <p className="invite-modal-note">Trimite mesajul din Gmail, din aplicașia de mail sau copiază textul.</p>
             <textarea value={lastInvite.body} readOnly />
             <div className="invite-actions">
               <button className="btn-primary" type="button" onClick={openGmailInvite}>Deschide Gmail</button>
               <button className="btn-ghost" type="button" onClick={openMailAppInvite}>Email app</button>
-              <button className="btn-ghost" type="button" onClick={copyInvite}>Copiază text</button>
+              <button className="btn-ghost" type="button" onClick={copyInvite}>Copiaza text</button>
               <button className="btn-ghost" type="button" onClick={closeInvitePopup}>Închide</button>
             </div>
           </div>
@@ -1921,22 +2654,26 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
         <h2>Worker nou</h2>
         <div className="field">
           <label>Nume complet</label>
-          <input ref={nameInputRef} value={name} onChange={e => setName(e.target.value)} placeholder="ex: Gheorghe Marin" autoFocus />
+          <input ref={nameInputRef} value={name} onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: "" })); }} placeholder="ex: Gheorghe Marin" autoFocus />
+          {errors.name && <p className="field-error">{errors.name}</p>}
         </div>
         <div className="field">
           <label>Username</label>
-          <input value={username} onChange={e => setUsername(e.target.value)} placeholder="ex: gheorghe sau gheorghe@email.ro" />
+          <input value={username} onChange={e => { setUsername(e.target.value); setErrors(prev => ({ ...prev, username: "" })); }} placeholder="ex: gheorghe sau gheorghe@email.ro" />
+          {errors.username && <p className="field-error">{errors.username}</p>}
         </div>
         <div className="field">
           <label>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="ex: gheorghe@email.ro" />
+          <input type="email" value={email} onChange={e => { setEmail(e.target.value); setErrors(prev => ({ ...prev, email: "" })); }} placeholder="ex: gheorghe@email.ro" />
+          {errors.email && <p className="field-error">{errors.email}</p>}
         </div>
         <div className="field">
           <label>Parolă</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+          <input type="password" value={password} onChange={e => { setPassword(e.target.value); setErrors(prev => ({ ...prev, password: "" })); }} placeholder="••••••••" />
+          {errors.password && <p className="field-error">{errors.password}</p>}
         </div>
         <div className="field">
-          <label>Activitate asignată</label>
+          <label>Activitate asignat?</label>
           <div className="activity-select">
             {workerActivities.map(a => (
               <button key={a} className={`act-btn act-${actSlug(a)} ${activity === a ? "selected" : ""}`} onClick={() => setActivity(a)}>
@@ -1947,13 +2684,13 @@ Te poți autentifica în aplicație cu datele de mai sus.`;
           <p className="field-note">Fiecare worker poate fi asignat la o singură activitate. Administrativ este vizibil pentru toți.</p>
         </div>
         <div className="form-actions">
-          <button className="btn-ghost" onClick={() => setView("workers")}>Anulează</button>
-          <button className="btn-primary" onClick={submit}>Creează worker</button>
+          <button className="btn-ghost" onClick={() => setView("workers")}>Anuleaza</button>
+          <button className="btn-primary" onClick={submit}>Creeaza worker</button>
         </div>
       </div>
     </div>
   );
 }
 
-function actIcon(n) { return n==="Electric"?"⚡":n==="Instalatii"?"🔧":n==="Tamplarie"?"🪵":"📋"; }
-function actDesc(n) { return n==="Electric"?"Lucrări electrice, tablouri, cablaje":n==="Instalatii"?"Instalații sanitare, termice, HVAC":n==="Tamplarie"?"Uși, ferestre, mobilier, finisaje":"Informații generale, documente, note"; }
+function actIcon(n) { return n==="Electric"?"EL":n==="Instalatii"?"IN":n==="Tamplarie"?"TA":"AD"; }
+function actDesc(n) { return n==="Electric"?"Lucrări electrice, tablouri, cablaje":n==="Instalatii"?"Instalașii sanitare, termice, HVAC":n==="Tamplarie"?"Uși, ferestre, mobilier, finisaje":"Informașii generale, documente, note"; }

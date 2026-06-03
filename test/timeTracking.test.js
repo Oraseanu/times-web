@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { initialState } from "../src/data/initialState.js";
+import { normalizeState } from "../src/data/repositories/stateTransforms.js";
 import {
   adjustTimeLogEntry,
   buildAdminActivityMatrix,
@@ -86,7 +87,26 @@ test("buildWorkerTimesheet include totalul proiectului pentru worker", () => {
 
   assert.equal(timesheet.projectTotal, 45);
   assert.equal(timesheet.groups.length, 1);
-  assert.equal(timesheet.groups[0].rows.length, 2);
+  assert.equal(timesheet.groups[0].rows.length, 7);
+});
+
+test("normalizeState completeaza subactivitatile Electric implicite in starile vechi", () => {
+  const saved = {
+    ...initialState,
+    subactivitySeedVersion: "old",
+    subactivitiesByActivity: {
+      ...initialState.subactivitiesByActivity,
+      Electric: initialState.subactivitiesByActivity.Electric.slice(0, 2),
+    },
+  };
+
+  const normalized = normalizeState(saved, initialState);
+
+  assert.equal(normalized.subactivitiesByActivity.Electric.length, 7);
+  assert.deepEqual(
+    normalized.subactivitiesByActivity.Electric.map(item => item.name),
+    initialState.subactivitiesByActivity.Electric.map(item => item.name),
+  );
 });
 
 test("isProjectArchived arhiveaza proiectul dupa 5 zile fara pontaj", () => {

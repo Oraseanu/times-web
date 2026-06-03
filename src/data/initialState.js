@@ -2,7 +2,15 @@
 export const DEFAULT_TIME_BUTTONS = [5, 30, 60];
 
 const initialSubactivitiesByActivity = {
-  Electric: [{ id: "s1", name: "Tablou electric" }, { id: "s2", name: "Prize și întrerupătoare" }],
+  Electric: [
+    { id: "s1", name: "Tablou electric" },
+    { id: "s2", name: "Prize și întrerupătoare" },
+    { id: "s5", name: "Trasee cabluri" },
+    { id: "s6", name: "Montaj corpuri iluminat" },
+    { id: "s7", name: "Doze și conexiuni" },
+    { id: "s8", name: "Verificări și măsurători" },
+    { id: "s9", name: "Punere în funcțiune" },
+  ],
   Instalatii: [{ id: "s3", name: "Țevi apă rece" }],
   Tamplarie: [],
   Administrativ: [{ id: "s4", name: "Ședință de coordonare" }],
@@ -21,6 +29,7 @@ export const initialState = {
     companyName: "",
   },
   favoriteSubactivities: {},
+  pinnedWorkProjects: {},
   projects: [
     { id: "p1", name: "Renovare Birouri", client: "SC Alpha SRL", createdAt: "2026-05-25" },
     { id: "p-demo-arch-1", name: "Modernizare Tablouri Nord", client: "SC Beta Instal SRL", createdAt: "2026-05-08" },
